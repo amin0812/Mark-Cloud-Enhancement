@@ -1,0 +1,286 @@
+%%[ 
+/*fill the following variables with your data*/
+SET @cloudpageURL = 'https://mc2xsctbllc5pw-0ck06pnh5c6g8.pub.sfmc-content.com/andvo5c5uaa'
+SET @baseURI = 'mc2xsctbllc5pw-0ck06pnh5c6g8'
+SET @clientid = 'dfglwp2mw24r4b5fz8b4aioj'
+SET @clientsecret = 'tKv0v0Cfrmsr3g0q9KEqSquz'
+
+/*define password (64), Initialization vector (32) and salt (16) for encryption
+- change for other pages*/
+set @ivector = '1eced5ba2d697c3412730e6c7e0d193b
+'
+set @salt = 'd90b548a9d06d607'
+set @encrpswd = 'd90b548a9d06d607xxxx'
+
+/*get code if passed with the URL*/
+SET @code = RequestParameter('code')
+
+/*check if session key is passed with the URL and decrypt it*/
+Set @passedencrsessionkey = RequestParameter('sessionkey')
+
+IF IsNullDefault(@passedencrsessionkey, 'null') != 'null' AND @passedencrsessionkey != '' THEN
+SET @passedsessionkey=DecryptSymmetric(@passedencrsessionkey, 'AES', @null, @encrpswd, @null, @salt, @null, @ivector)   
+ENDIF
+
+/*create encrypted session key with 1 hour lifetime for usage in forms and redirects*/
+set @newsessionkey = DateAdd(Now(),1,"H")
+SET @sessionkey=EncryptSymmetric(@newsessionkey, 'AES', @null, @encrpswd, @null, @salt, @null, @ivector)
+
+/*check if the passed session key is valid if available*/
+IF IsNullDefault(@passedencrsessionkey, 'null') != 'null' AND @passedencrsessionkey != '' AND @passedsessionkey >= Now()
+AND @passedsessionkey <= @newsessionkey
+THEN 
+/*load Cloudpage*/
+
+/*if passed session key is not valid check if a code is available and check it via API request, redirect through auth-page if the code is not valid*/
+ELSEIF IsNullDefault(@code, 'null') != 'null' AND @code != '' 
+THEN 
+
+]%%
+
+<script runat="server">
+Platform.Load("Core","1.1.1");
+   
+try { 
+    
+/* get OAuth 2.0 access token */
+var code = Platform.Variable.GetValue("@code");
+var payload = '{"grant_type": "authorization_code",';
+payload += '"code": "' + code + '",';
+payload += '"client_id": "' + Variable.GetValue("@clientid") + '",';
+payload += '"client_secret": "' + Variable.GetValue("@clientsecret") + '",';
+payload += '"scope": null,';
+payload += '"redirect_uri": "' + Variable.GetValue("@cloudpageURL") + '"}';
+var OAuth2URL = 'https://' + Variable.GetValue("@baseURI") + '.auth.marketingcloudapis.com/v2/token';
+var contentType = 'application/json';
+var checkCode  = HTTP.Post(OAuth2URL, contentType, payload);
+
+
+/* start optional personalization */
+/* make the userinfo API call and get the response */
+var tokenObj = Platform.Function.ParseJSON(checkCode["Response"][0]);
+var accessToken = tokenObj.access_token;
+var headerNames = ["Authorization"];
+var headerValues = ["Bearer " + accessToken];
+var urlCreate = 'https://' + Variable.GetValue("@baseURI") + '.auth.marketingcloudapis.com/v2/userinfo';
+var userinfo = HTTP.Get(urlCreate, headerNames, headerValues);
+var userinfojson = Platform.Function.ParseJSON(userinfo["Content"]);
+Variable.SetValue("@preferred_username",userinfojson.user.preferred_username);  
+Variable.SetValue("@name",userinfojson.user.name);  
+Variable.SetValue("@email",userinfojson.user.email);  
+Variable.SetValue("@locale",userinfojson.user.locale);  
+Variable.SetValue("@zoneinfo",userinfojson.user.zoneinfo);   
+Variable.SetValue("@timezone_longName",userinfojson.user.timezone.longName);
+Variable.SetValue("@timezone_shortName",userinfojson.user.timezone.shortName);
+Variable.SetValue("@timezone_offset",userinfojson.user.timezone.offset);
+Variable.SetValue("@timezone_dst",userinfojson.user.timezone.dst);
+
+Variable.SetValue("@org_member_id",userinfojson.organization.member_id);
+Variable.SetValue("@org_enterprise_id",userinfojson.organization.enterprise_id);
+Variable.SetValue("@org_enterprise_name",userinfojson.organization.enterprise_name);
+Variable.SetValue("@org_account_type",userinfojson.organization.account_type);
+Variable.SetValue("@org_stack_key",userinfojson.organization.stack_key);
+Variable.SetValue("@org_region",userinfojson.organization.region);
+Variable.SetValue("@org_locale",userinfojson.organization.locale);
+Variable.SetValue("@org_zoneinfo",userinfojson.organization.zoneinfo);
+  
+Variable.SetValue("@org_timezoneLongName",userinfojson.organization.timezone.longName);  
+Variable.SetValue("@org_timezoneShortName",userinfojson.organization.timezone.shortName);  
+Variable.SetValue("@org_timezoneOffset",userinfojson.organization.timezone.offset);  
+Variable.SetValue("@org_timezoneDST",userinfojson.organization.timezone.dst);  
+
+//Variable.SetValue("@json",Stringify(userinfojson));   
+/* end optional personalization */
+
+}
+  
+catch(e) {
+</script>
+
+%%[Redirect(CONCAT('https://', @baseURI, '.auth.marketingcloudapis.com/v2/authorize?response_type=code&client_id=', @clientid, '&redirect_uri=',@cloudpageURL))]%%
+
+<script runat="server">}</script>
+
+%%[
+/*If there is no code and no valid session key redirect through auth-page*/
+ELSE
+Redirect(CONCAT('https://', @baseURI, '.auth.marketingcloudapis.com/v2/authorize?response_type=code&client_id=', @clientid, '&redirect_uri=',@cloudpageURL))
+
+ENDIF
+]%%
+<html lang="en">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>meinDOc</title>
+ %%=concat('<scr','ipt', ' src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous">','</scr','ipt>')=%%
+ <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.12.1/css/jquery.dataTables.css">
+  %%=concat('<scr','ipt', ' type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.12.1/js/jquery.dataTables.js">','</scr','ipt>')=%%
+%%=concat('<scr','ipt', ' type="text/javascript">$(document).ready( function () {
+    $("#table_id").DataTable();
+} );','</scr','ipt>')=%%
+</head>
+<body>
+<!--
+<br><b>userinfo</b>
+<br>preferred_username:%%=v(@preferred_username)=%%
+<br>name: %%=v(@name)=%%
+<br>email: %%=v(@email)=%%
+<br>locale: %%=v(@locale)=%%
+<br>zoneinfo: %%=v(@zoneinfo)=%%
+<br>timezone.longName: %%=v(@timezone_longName)=%%
+<br>timezone.shortName: %%=v(@timezone_shortName)=%% 
+<br>timezone.offset: %%=v(@timezone_offset)=%%
+<br>timezone.dst: %%=v(@timezone_dst)=%%
+<br>
+<br><b>organization info</b>
+<br>member_id: %%=v(@org_member_id)=%%
+<br>enterprise_id: %%=v(@org_enterprise_id)=%%
+<br>enterprise_name: %%=v(@org_enterprise_name)=%%
+<br>account_type: %%=v(@org_account_type)=%%
+<br>stack_key: %%=v(@org_stack_key)=%%
+<br>region: %%=v(@org_region)=%%
+<br>locale: %%=v(@org_locale)=%%
+<br>zoneinfo: %%=v(@org_zoneinfo)=%%
+<br>org_timezoneLongName: %%=v(@org_timezoneLongName)=%%
+<br>org_timezoneShortName: %%=v(@org_timezoneShortName)=%%
+<br>org_timezoneOffset: %%=v(@org_timezoneOffset)=%%
+<br>org_timezoneDST: %%=v(@org_timezoneDST)=%%
+
+<br> - youre authenticated! other code can be placed here.
+-->
+
+<table id="table_id" class="display">
+    <thead>
+        <tr>
+         <th>businessUnit</th>
+            <th>Process</th>
+            <th>permissionType</th>
+            <th>sourceCategory</th>
+            <th>source</th>
+            <th>eventDefinitionKey</th>
+            <th>include this row</th>
+        </tr>
+    </thead>
+    <tbody>
+
+ %%[
+
+ SET @myRowset = LookupRows('sources2JourneyMapping_TEST','businessUnit','536001099')
+
+ SET @rowcount = rowcount(@myRowset)
+
+ IF @rowcount > 0 THEN
+
+  FOR @i = 1 to @rowcount DO
+  SET @row = ROW(@myRowset,@i)
+  SET @process = FIELD(@row,"process")
+  SET @permissionType = FIELD(@row,"permissionType")
+  SET @sourceCategory = FIELD(@row,"sourceCategory")
+  SET @source = FIELD(@row,"source")
+  SET @eventDefinitionKey = FIELD(@row,"eventDefinitionKey")
+  SET @bulkAutomation = FIELD(@row,"bulkAutomation")
+
+  ]%%
+  <tr>
+   <td>%%=v(@org_member_id)=%%</td>
+          <td>%%=v(@process)=%% </td>
+          <td>%%=v(@permissionType)=%%</td>
+          <td>%%=v(@sourceCategory)=%%</td>
+          <td>%%=v(@source)=%% </td>
+          <td><input type="text" value="%%=v(@eventDefinitionKey)=%%"/></td>
+          <td><input type="checkbox"/></td>     
+     </tr>
+  %%[
+  NEXT @i
+ ENDIF
+ ]%%        
+    <tr>
+     <td>%%=v(@org_member_id)=%%</td>
+     <td data-primaryKeyOrNot="pk"><select name="process" id="process">
+     <option value="welcome">welcome</option>
+     <option value="additionalSubscribe">additionalSubscribe</option>
+     <option value="unsubscribe">unsubscribe</option>
+    </select>
+       </td>
+     <td data-primaryKeyOrNot="pk"><select name="permissionType" id="permissionType">
+     <option value="standard">standard</option>
+     <option value="club">club</option>
+     <option value="test">test</option>
+    </select></td>
+     <td data-primaryKeyOrNot="pk"><select name="sourceCategory" id="sourceCategory">
+     <option value="default">default</option>
+     <option value="website">website</option>
+    </select></td>
+     <td data-primaryKeyOrNot="pk"><select name="source" id="source">
+ <option value="default">send nothing - "default"</option>
+    <option value="MA00000001">meineErsteEmail - "MA00000001"</option>
+    </select></td>
+     <td data-primaryKeyOrNot="noPk"><input type="text"/></td>     
+     <td data-primaryKeyOrNot="noPk"><input type="checkbox"/></td>     
+    </tr>
+    </tbody>
+
+</table>
+
+ 
+</body>
+</html>
+
+
+
+<!--/*
+
+on click:
+
+for each row with "include" box checked
+retrieve all labels, retrieve all inputs
+construct a payload JSON
+send POST request with array payload 
+
+handlerpage:
+
+SSJS parsejson
+for each item in array:
+ Upsert by (list of labels) >> inputs.
+end for
+
+pseudo payload
+
+{
+   "targetDataExtension":"sources2JourneyMapping_TEST",
+   "data":{
+      "primaryKeys":[
+         "businessUnit",
+         "process",
+         "sourceCategory",
+         "source"
+      ],
+      "pkValues":[
+         "536001099",
+         "welcome",
+         "default",
+         "default"
+      ],
+      "nonPrimaryKeys":[
+         "eventDefinitionKey"
+      ],
+      "nonPkValues":[
+         "event1222313123213"
+      ]
+   }
+}
+
+upsert template
+
+     var rows = Platform.Function.UpsertData("CustomerData",["ID"],["12345"],["Company","Country","Region"],["exampleCompany","USA","West"]);
+
+
+upsert + pseudo payload in SSJS:
+
+     var rows = Platform.Function.UpsertData(payload.targetDataExtension,payload.data[i].primaryKeys,payload.data[i].pkValues,payload.data[i].nonPrimaryKeys,payload.data[i].nonPkValues);
+
+
+
+
+*/-->
